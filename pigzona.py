@@ -1,10 +1,14 @@
 import os
 import json
-import re  # <--- Adicione este import
+import re
 import sqlite3
 import io
 import asyncio
+import threading
 from datetime import datetime
+
+# Servidor Web para a Render
+from flask import Flask
 
 # Bibliotecas do Telegram
 from telegram import Update
@@ -39,16 +43,14 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 DB_NAME = "financas.db"
 
 def limpar_json_resposta(texto: str) -> str:
-   """Extrai e limpa o bloco JSON retornado pelo modelo."""
-   # Remove marcações de bloco de código markdown como ```json ... ```
-   texto = re.sub(r'```json\s*', '', texto)
-   texto = re.sub(r'```\s*$', '', texto)
-   texto = texto.strip()
-   # Busca o primeiro objeto ou array JSON válido no texto
-   match = re.search(r'(\{.*\}|\[.*\])', texto, re.DOTALL)
-   if match:
-       return match.group(0)
-   return texto
+    """Extrai e limpa o bloco JSON retornado pelo modelo."""
+    texto = re.sub(r'```json\s*', '', texto)
+    texto = re.sub(r'```\s*$', '', texto)
+    texto = texto.strip()
+    match = re.search(r'(\{.*\}|\[.*\])', texto, re.DOTALL)
+    if match:
+        return match.group(0)
+    return texto
 
 def init_db():
     """Cria a tabela de transações no banco de dados se não existir."""
@@ -90,7 +92,7 @@ def obter_resumo_mes_atual():
         WHERE strftime('%Y-%m', data_registro) = ?
         GROUP BY tipo
     """, (mes_atual,))
-    
+   
     totais = dict(cursor.fetchall())
     total_receita = totais.get('receita', 0.0)
     total_despesa = totais.get('despesa', 0.0)
@@ -103,7 +105,7 @@ def obter_resumo_mes_atual():
         GROUP BY categoria
         ORDER BY SUM(valor) DESC
     """, (mes_atual,))
-    
+   
     categorias_gastos = cursor.fetchall()
     conn.close()
     return total_receita, total_despesa, saldo, categorias_gastos
@@ -139,7 +141,7 @@ def gerar_grafico_gastos_mes():
         GROUP BY categoria
         ORDER BY SUM(valor) DESC
     """, (mes_atual,))
-    
+   
     dados = cursor.fetchall()
     conn.close()
 
@@ -226,19 +228,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def comando_saldo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_rec, total_desp, saldo, categorias = obter_resumo_mes_atual()
     nome_mes = datetime.now().strftime('%m/%Y')
-    
+   
     msg = f"📊 **Resumo Financeiro de {nome_mes}**\n\n"
     msg += f"🟢 **Entradas:** R$ {total_rec:.2f}\n"
     msg += f"🔴 **Saídas:** R$ {total_desp:.2f}\n"
     msg += f"💵 **Saldo Atual:** R$ {saldo:.2f}\n\n"
-    
+   
     if categorias:
         msg += "🏷️ **Gastos por Categoria:**\n"
         for cat, valor in categorias:
             msg += f"  • {cat}: R$ {valor:.2f}\n"
     else:
         msg += "✨ Nenhum gasto registrado neste mês!"
-        
+       
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def comando_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -246,20 +248,20 @@ async def comando_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not registros:
         await update.message.reply_text("📂 Nenhum registro encontrado no banco de dados.")
         return
-        
+       
     msg = "📜 **Últimos 5 Lançamentos:**\n\n"
     for tipo, valor, cat, desc, data in registros:
         emoji = "🟢" if tipo == "receita" else "🔴"
         msg += f"{emoji} **R$ {valor:.2f}** | {cat}\n"
         msg += f"   📝 {desc or 'Sem descrição'}\n"
         msg += f"   🕒 {data}\n\n"
-        
+       
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def comando_grafico(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📊 Gerando seu relatório visual...")
     grafico_img = gerar_grafico_gastos_mes()
-    
+   
     if not grafico_img:
         await update.message.reply_text("✨ Você ainda não tem despesas registradas neste mês para gerar um gráfico!")
         return
@@ -281,10 +283,10 @@ async def comando_zerar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def processar_entrada_financeira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     await message.reply_text("⏳ Processando seu documento/registro (pode levar alguns segundos)...")
-    
+   
     file_path = None
     prompt_content = []
-    
+   
     try:
         # 1. MENSAGEM DE TEXTO
         if message.text:
@@ -309,14 +311,14 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
             prompt_content.append(uploaded_file)
             prompt_content.append("Ouça o áudio e extraia os dados da transação financeira.")
 
-        # 4. ARQUIVOS PDF (Extratos longos ou comprovantes)
+        # 4. ARQUIVOS PDF
         elif message.document:
             doc = message.document
             file_extension = os.path.splitext(doc.file_name)[1].lower() if doc.file_name else ".pdf"
             file_path = f"temp_doc{file_extension}"
             doc_file = await doc.get_file()
             await doc_file.download_to_drive(file_path)
-            
+           
             uploaded_file = client.files.upload(file=file_path)
             prompt_content.append(uploaded_file)
             prompt_content.append(
@@ -324,8 +326,7 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
                 "Extraia todas as transações (entradas e saídas) visíveis no documento."
             )
 
-        # Chamada com modelo oficial e retentativa assíncrona
-# Tentativas de chamada com tratamento limpo de limites de requisição
+        # Tentativas de chamada com tratamento limpo de limites de requisição
         max_tentativas = 3
         response = None
 
@@ -343,7 +344,6 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
             except Exception as err:
                 erro_str = str(err)
                 if ("429" in erro_str or "RESOURCE_EXHAUSTED" in erro_str) and tentativa < max_tentativas - 1:
-                    # Aguarda 10 segundos para a cota por minuto reiniciar
                     await asyncio.sleep(10)
                 else:
                     raise err
@@ -351,8 +351,8 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
         if not response or not response.text:
             raise Exception("A IA não retornou uma resposta válida.")
 
-            texto_limpo = limpar_json_resposta(response.text)
-            dados = json.loads(texto_limpo)
+        texto_limpo = limpar_json_resposta(response.text)
+        dados = json.loads(texto_limpo)
 
         # VERIFICA A AÇÃO SOLICITADA PELA IA
         acao = dados.get("acao", "registro")
@@ -367,10 +367,9 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
                 await comando_historico(update, context)
             return
 
-        # GRAVAÇÃO DAS TRANSAÇÕES (Suporta 1 ou VÁRIAS transações)
+        # GRAVAÇÃO DAS TRANSAÇÕES
         lista_transacoes = dados.get("transacoes", [])
-        
-        # Fallback de segurança se a IA retornar estrutura simplificada
+       
         if not lista_transacoes and "valor" in dados:
             lista_transacoes = [dados]
 
@@ -397,7 +396,6 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
                 else:
                     soma_despesas += valor
 
-        # Resumo final enviado ao usuário
         if total_salvo == 1:
             texto_resposta = (
                 f"✅ **Lançamento Salvo!**\n\n"
@@ -426,13 +424,8 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
 
 
 # ==========================================
-# 🚀 INICIALIZAÇÃO DO BOT
+# 🌐 CONFIGURAÇÃO DO SERVIDOR WEB PARA A RENDER
 # ==========================================
-if __name__ == "__main__":
- from flask import Flask
-import threading
-
-# Cria um servidor Web simples para a Render não encerrar o processo gratuito
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -442,6 +435,7 @@ def home():
 def run_web():
     port = int(os.environ.get("PORT", 8080))
     web_app.run(host="0.0.0.0", port=port)
+
 
 # ==========================================
 # 🚀 INICIALIZAÇÃO DO BOT E DO SERVIDOR WEB
@@ -467,6 +461,10 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(
         filters.TEXT | filters.PHOTO | filters.VOICE | filters.AUDIO | filters.Document.ALL,
         processar_entrada_financeira
+    ))
+
+    print("🤖 Bot financeiro completo rodando...")
+    app.run_polling()
     ))
 
     print("🤖 Bot financeiro completo rodando...")
