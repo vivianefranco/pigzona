@@ -1,5 +1,6 @@
 import os
 import json
+import re  # <--- Adicione este import
 import sqlite3
 import io
 import asyncio
@@ -36,6 +37,18 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # 🗄️ GERENCIAMENTO DO BANCO DE DADOS (SQLite)
 # ==========================================
 DB_NAME = "financas.db"
+
+def limpar_json_resposta(texto: str) -> str:
+   """Extrai e limpa o bloco JSON retornado pelo modelo."""
+   # Remove marcações de bloco de código markdown como ```json ... ```
+   texto = re.sub(r'```json\s*', '', texto)
+   texto = re.sub(r'```\s*$', '', texto)
+   texto = texto.strip()
+   # Busca o primeiro objeto ou array JSON válido no texto
+   match = re.search(r'(\{.*\}|\[.*\])', texto, re.DOTALL)
+   if match:
+       return match.group(0)
+   return texto
 
 def init_db():
     """Cria a tabela de transações no banco de dados se não existir."""
@@ -338,7 +351,8 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
         if not response or not response.text:
             raise Exception("A IA não retornou uma resposta válida.")
 
-        dados = json.loads(response.text)
+            texto_limpo = limpar_json_resposta(response.text)
+            dados = json.loads(texto_limpo)
 
         # VERIFICA A AÇÃO SOLICITADA PELA IA
         acao = dados.get("acao", "registro")
