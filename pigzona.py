@@ -332,7 +332,7 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
         for tentativa in range(max_tentativas):
             try:
                 response = client.models.generate_content(
-                    model='gemini-3.5-flash',
+                    model='gemini-3.1-flash-lite',
                     contents=prompt_content,
                     config=types.GenerateContentConfig(
                         system_instruction=SYSTEM_PROMPT,
