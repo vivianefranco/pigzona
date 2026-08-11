@@ -522,22 +522,14 @@ async def processar_entrada_financeira(
 
         acao = dados.get("acao", "registro")
 
-        # VERIFICA A AÇÃO SOLICITADA PELA IA
-       acao = dados.get("acao", "registro")
-       # NOVO: Trata mensagens conversacionais ou sem valor monetário
-       if acao == "outros":
-           resposta_ia = dados.get("resposta", "Entendido! Quando quiser registrar esse gasto, basta me mandar o valor (ex: 'Pagamento Client Co R$ 150').")
-           await message.reply_text(resposta_ia)
-           return
-       if acao == "relatorio":
-           tipo_rel = dados.get("tipo_relatorio", "grafico")
-           if tipo_rel == "grafico":
-               await comando_grafico(update, context)
-           elif tipo_rel == "saldo":
-               await comando_saldo(update, context)
-           else:
-               await comando_historico(update, context)
-           return
+        if acao == "outros":
+            resposta_ia = dados.get(
+                "resposta",
+                "Entendido! Quando quiser registrar esse gasto, "
+                "basta me mandar o valor.",
+            )
+            await message.reply_text(resposta_ia)
+            return
 
         if acao == "relatorio":
             tipo_rel = dados.get("tipo_relatorio", "grafico")
