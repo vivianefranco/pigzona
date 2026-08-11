@@ -348,13 +348,13 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
                 else:
                     raise err
 
-        if not response or not response.text:
-            raise Exception("A IA não retornou uma resposta válida.")
-
-        texto_limpo = limpar_json_resposta(response.text)
-        dados = json.loads(texto_limpo)
-
-        # VERIFICA A AÇÃO SOLICITADA PELA IA
+if not response or not response.text:
+           raise Exception("A IA não retornou uma resposta válida.")
+       # ✅ AGORA CORRETO (Fora do bloco 'if'):
+       texto_limpo = limpar_json_resposta(response.text)
+       dados = json.loads(texto_limpo)
+       # VERIFICA A AÇÃO SOLICITADA PELA IA
+       acao = dados.get("acao", "registro")
         acao = dados.get("acao", "registro")
 
         if acao == "relatorio":
