@@ -1,0 +1,4 @@
+python-telegram-bot
+google-genai
+matplotlib
+python-dotenv
