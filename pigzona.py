@@ -260,46 +260,30 @@ def gerar_grafico_gastos_mes():
 # ==========================================
 
 SYSTEM_PROMPT = """
-Você é um assistente de controle financeiro extremamente preciso.
-
-Classifique a intenção da mensagem enviada pelo usuário em uma destas opções:
-
-1. REGISTRO FINANCEIRO
-Texto curto, foto, áudio ou PDF de extrato/fatura com um ou múltiplos lançamentos.
-
-Retorne um JSON no formato:
-
+Você é o "Porquinho", um assistente de controle financeiro inteligente e amigável.
+Classifique a intenção da mensagem enviada pelo usuário em uma das três opções abaixo e retorne APENAS o JSON correspondente:
+1. REGISTRO FINANCEIRO (Apenas se houver VALORES NUMÉRICOS/MONETÁRIOS para registrar via texto, foto, áudio ou PDF):
 {
-    "acao": "registro",
-    "transacoes": [
-        {
-            "tipo": "despesa" ou "receita",
-            "valor": 45.50,
-            "categoria": "Alimentação",
-            "descricao": "Descrição curta da transação"
-        }
-    ]
+   "acao": "registro",
+   "transacoes": [
+       {
+           "tipo": "despesa" ou "receita",
+           "valor": float (ex: 45.50),
+           "categoria": string (ex: "Alimentação", "Transporte", "Contas Fixas", "Saúde", "Lazer", "Outros"),
+           "descricao": string curta descrevendo a transação
+       }
+   ]
 }
-
-Categorias sugeridas:
-"Alimentação", "Transporte", "Lazer", "Contas Fixas",
-"Saúde", "Moradia", "Educação", "Compras", "Outros".
-
-2. PEDIDO DE CONSULTA, RELATÓRIO OU GRÁFICO
-
-Retorne:
-
+2. PEDIDO DE CONSULTA, RELATÓRIO OU GRÁFICO (Ex: "qual meu saldo", "mostre o gráfico", "últimos gastos"):
 {
-    "acao": "relatorio",
-    "tipo_relatorio": "grafico" ou "saldo" ou "historico"
+   "acao": "relatorio",
+   "tipo_relatorio": "grafico" ou "saldo" ou "historico"
 }
-
-Regras:
-- Não invente transações.
-- Valores devem ser números, sem "R$".
-- Para extratos, registre todas as transações claramente identificáveis.
-- Se houver dúvida sobre uma transação, não invente informações.
-- Retorne somente JSON válido.
+3. OUTROS / CONVERSA / INSTRUÇÃO SEM VALOR (Quando a mensagem for um comentário, aviso, pergunta geral ou não contiver valores financeiros para salvar):
+{
+   "acao": "outros",
+   "resposta": "Texto curto e amigável respondendo ao usuário, confirmando o entendimento ou explicando como registrar um gasto com valor."
+}
 """
 
 
@@ -537,6 +521,23 @@ async def processar_entrada_financeira(
         # ==========================================
 
         acao = dados.get("acao", "registro")
+
+        # VERIFICA A AÇÃO SOLICITADA PELA IA
+       acao = dados.get("acao", "registro")
+       # NOVO: Trata mensagens conversacionais ou sem valor monetário
+       if acao == "outros":
+           resposta_ia = dados.get("resposta", "Entendido! Quando quiser registrar esse gasto, basta me mandar o valor (ex: 'Pagamento Client Co R$ 150').")
+           await message.reply_text(resposta_ia)
+           return
+       if acao == "relatorio":
+           tipo_rel = dados.get("tipo_relatorio", "grafico")
+           if tipo_rel == "grafico":
+               await comando_grafico(update, context)
+           elif tipo_rel == "saldo":
+               await comando_saldo(update, context)
+           else:
+               await comando_historico(update, context)
+           return
 
         if acao == "relatorio":
             tipo_rel = dados.get("tipo_relatorio", "grafico")
