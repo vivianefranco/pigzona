@@ -326,27 +326,31 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
                 "Extraia todas as transações (entradas e saídas) visíveis no documento."
             )
 
-        # Tentativas de chamada com tratamento limpo de limites de requisição
-        max_tentativas = 3
-        response = None
-
-        for tentativa in range(max_tentativas):
-            try:
-                response = client.models.generate_content(
-                    model='gemini-3.1-flash-lite',
-                    contents=prompt_content,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        response_mime_type="application/json"
-                    )
-                )
-                break  # Sucesso! Sai do loop
-            except Exception as err:
-                erro_str = str(err)
-                if ("429" in erro_str or "RESOURCE_EXHAUSTED" in erro_str) and tentativa < max_tentativas - 1:
-                    await asyncio.sleep(10)
-                else:
-                    raise err
+# Tentativas de chamada com tratamento limpo de limites de requisição
+       max_tentativas = 3
+       response = None
+       for tentativa in range(max_tentativas):
+           try:
+               response = client.models.generate_content(
+                   model='gemini-1.5-flash',
+                   contents=prompt_content,
+                   config=types.GenerateContentConfig(
+                       system_instruction=SYSTEM_PROMPT,
+                       response_mime_type="application/json"
+                   )
+               )
+               break  # Sucesso! Sai do loop de tentativas
+           except Exception as err:
+               erro_str = str(err)
+               if ("429" in erro_str or "RESOURCE_EXHAUSTED" in erro_str) and tentativa < max_tentativas - 1:
+                   await asyncio.sleep(10)
+               else:
+                   raise err
+       # O 'if' fica FORA do bloco try/except, na mesma linha de indentação do 'for'
+       if not response or not response.text:
+           raise Exception("A IA não retornou uma resposta válida.")
+       texto_limpo = limpar_json_resposta(response.text)
+       dados = json.loads(texto_limpo)
 
 if not response or not response.text:
            raise Exception("A IA não retornou uma resposta válida.")
