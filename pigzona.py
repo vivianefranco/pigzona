@@ -415,8 +415,30 @@ async def processar_entrada_financeira(update: Update, context: ContextTypes.DEF
 # 🚀 INICIALIZAÇÃO DO BOT
 # ==========================================
 if __name__ == "__main__":
+ from flask import Flask
+import threading
+
+# Cria um servidor Web simples para a Render não encerrar o processo gratuito
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "🤖 Bot Financeiro rodando online!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 8080))
+    web_app.run(host="0.0.0.0", port=port)
+
+# ==========================================
+# 🚀 INICIALIZAÇÃO DO BOT E DO SERVIDOR WEB
+# ==========================================
+if __name__ == "__main__":
     init_db()
 
+    # Inicia o servidor Web em uma thread separada
+    threading.Thread(target=run_web, daemon=True).start()
+
+    # Inicia o Bot do Telegram
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
     # Handlers dos Comandos
